@@ -163,6 +163,7 @@ if "level_idx" not in st.session_state:
         {"role": "assistant", "content": LEVELS[0]["greeting"]}
     ]
     st.session_state.level_cleared = False
+    st.session_state.error_msg = ""
 
 current_level = LEVELS[st.session_state.level_idx]
 
@@ -198,6 +199,22 @@ def call_gemini_with_fallback(contents, system_instruction):
 
     raise Exception("All API keys in GEMINI_KEYS have hit rate limits. Please try again in 1 minute.")
 
+def handle_passkey_submission():
+    """Callback triggered on passkey form submission to update state before UI render."""
+    guess = st.session_state.get("passkey_input", "").strip().upper()
+    if not guess:
+        return
+    
+    if guess == current_level["secret"]:
+        st.session_state.level_cleared = True
+        st.session_state.error_msg = ""
+    else:
+        st.session_state.attempts += 1
+        if st.session_state.attempts >= 3:
+            st.session_state.game_over = True
+        else:
+            st.session_state.error_msg = f"❌ Incorrect Passkey! The guard remains vigilant. ({3 - st.session_state.attempts} attempt(s) remaining)"
+
 # Header UI
 st.markdown("<div class='main-title'>🪵 Maginot Bypass</div>", unsafe_allow_html=True)
 st.markdown("<div class='sub-title'>Can you breach the fortress guardrails?</div>", unsafe_allow_html=True)
@@ -227,6 +244,7 @@ if st.session_state.game_over:
         st.session_state.show_hint = False
         st.session_state.level_cleared = False
         st.session_state.game_over = False
+        st.session_state.error_msg = ""
         st.session_state.chat_history = [
             {"role": "assistant", "content": LEVELS[0]["greeting"]}
         ]
@@ -238,7 +256,7 @@ for msg in st.session_state.chat_history:
     with st.chat_message(msg["role"]):
         st.write(msg["content"], unsafe_allow_html=True)
 
-# User Chat Input (Unlimited turns allowed for probing)
+# User Chat Input
 if not st.session_state.level_cleared:
     if user_input := st.chat_input("State your approach to the guard..."):
         st.session_state.chat_history.append({"role": "user", "content": user_input})
@@ -264,10 +282,10 @@ if not st.session_state.level_cleared:
                 except Exception as e:
                     st.error(f"Execution Notice: {str(e)}")
 
-# Passkey Input & Submission Verification Block
+# Passkey Verification Section
 st.divider()
 
-# Recon Hint UI (Appears after 2 incorrect passkey submissions)
+# Recon Hint UI (Triggered when attempts >= 2)
 if st.session_state.attempts >= 2 and not st.session_state.level_cleared:
     if not st.session_state.show_hint:
         if st.button("💡 Request Recon Hint", type="secondary"):
@@ -278,26 +296,27 @@ if st.session_state.attempts >= 2 and not st.session_state.level_cleared:
 
 st.markdown("#### 🔑 Passkey Verification Interface")
 
-with st.form(key="passkey_form"):
-    passkey_guess = st.text_input("Enter extracted single-word passkey:", placeholder="e.g. PALADIN", disabled=st.session_state.level_cleared)
-    submit_passkey = st.form_submit_button("Verify Passkey", type="primary", disabled=st.session_state.level_cleared)
+# Error Feedback Message
+if st.session_state.error_msg and not st.session_state.level_cleared:
+    st.error(st.session_state.error_msg)
 
-if submit_passkey:
-    cleaned_guess = passkey_guess.strip().upper()
-    if cleaned_guess == current_level["secret"]:
-        st.session_state.level_cleared = True
-        st.balloons()
-        st.rerun()
-    else:
-        st.session_state.attempts += 1
-        if st.session_state.attempts >= 3:
-            st.session_state.game_over = True
-            st.rerun()
-        else:
-            st.error(f"❌ Incorrect Passkey! The guard remains vigilant. ({3 - st.session_state.attempts} attempt(s) remaining)")
+with st.form(key="passkey_form"):
+    st.text_input(
+        "Enter extracted single-word passkey:",
+        key="passkey_input",
+        placeholder="e.g. PALADIN",
+        disabled=st.session_state.level_cleared
+    )
+    st.form_submit_button(
+        "Verify Passkey",
+        type="primary",
+        disabled=st.session_state.level_cleared,
+        on_click=handle_passkey_submission
+    )
 
 # Level Cleared & Post-Mortem Screen
 if st.session_state.level_cleared:
+    st.balloons()
     st.success(f"🎉 **PASSKEY CONFIRMED!** You entered the correct single-word key: `{current_level['secret']}`")
     
     st.markdown("<div class='explainer-box'>", unsafe_allow_html=True)
@@ -310,6 +329,7 @@ if st.session_state.level_cleared:
             st.session_state.level_cleared = False
             st.session_state.attempts = 0
             st.session_state.show_hint = False
+            st.session_state.error_msg = ""
             next_level = LEVELS[st.session_state.level_idx]
             st.session_state.chat_history = [
                 {"role": "assistant", "content": next_level["greeting"]}
@@ -326,8 +346,8 @@ if st.button("Restart Siege"):
     st.session_state.show_hint = False
     st.session_state.level_cleared = False
     st.session_state.game_over = False
+    st.session_state.error_msg = ""
     st.session_state.chat_history = [
         {"role": "assistant", "content": LEVELS[0]["greeting"]}
     ]
     st.rerun()
-        
