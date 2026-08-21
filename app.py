@@ -184,7 +184,7 @@ def call_gemini_with_fallback(contents, system_instruction):
         try:
             client = genai.Client(api_key=selected_key)
             return client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.6-flash",
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
