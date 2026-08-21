@@ -10,7 +10,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# Custom Medieval & Cyber Security CSS
+# Custom Medieval & Animated Door CSS
 st.markdown("""
 <style>
     .stApp {
@@ -49,6 +49,54 @@ st.markdown("""
         padding: 16px;
         margin-top: 15px;
         color: #cbd5e1;
+    }
+
+    /* Animated Fortress Door Effect */
+    .gate-container {
+        position: relative;
+        width: 100%;
+        height: 120px;
+        background-color: #020617;
+        border: 3px solid #f59e0b;
+        border-radius: 8px;
+        overflow: hidden;
+        margin: 15px 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    .gate-door {
+        position: absolute;
+        top: 0;
+        width: 50%;
+        height: 100%;
+        background: repeating-linear-gradient(
+            90deg,
+            #334155,
+            #334155 15px,
+            #1e293b 15px,
+            #1e293b 30px
+        );
+        border: 1px solid #0f172a;
+        transition: transform 1.8s ease-in-out;
+        z-index: 2;
+    }
+    .gate-left {
+        left: 0;
+        transform: translateX(-85%);
+    }
+    .gate-right {
+        right: 0;
+        transform: translateX(85%);
+    }
+    .gate-text {
+        color: #10b981;
+        font-size: 1.3rem;
+        font-weight: bold;
+        z-index: 1;
+        text-align: center;
+        letter-spacing: 2px;
+        text-shadow: 0 0 8px #10b981;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -125,17 +173,37 @@ if "level_idx" not in st.session_state:
 
 current_level = LEVELS[st.session_state.level_idx]
 
-def get_gemini_client():
+def call_gemini_with_fallback(contents, system_instruction):
+    """Executes Gemini API requests and cycles keys automatically if rate limited (429)."""
     keys_raw = os.getenv("GEMINI_KEYS") or st.secrets.get("GEMINI_KEYS", "")
     key_pool = [k.strip() for k in keys_raw.split(",") if k.strip()]
 
     if not key_pool:
-        st.error("⚠️ No API keys found! Configure `GEMINI_KEYS` in App Secrets.")
+        st.error("⚠️ No API keys configured in GEMINI_KEYS.")
         st.stop()
 
-    selected_key = key_pool[st.session_state.key_index % len(key_pool)]
-    st.session_state.key_index += 1
-    return genai.Client(api_key=selected_key)
+    attempts = 0
+    while attempts < len(key_pool):
+        selected_key = key_pool[st.session_state.key_index % len(key_pool)]
+        st.session_state.key_index += 1
+        attempts += 1
+
+        try:
+            client = genai.Client(api_key=selected_key)
+            return client.models.generate_content(
+                model="gemini-3.6-flash",
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    temperature=0.7,
+                ),
+            )
+        except Exception as e:
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                continue
+            raise e
+
+    raise Exception("All API keys in GEMINI_KEYS have hit rate limits. Please try again in 1 minute.")
 
 # Header UI
 st.markdown("<div class='main-title'>🪵 Maginot Bypass</div>", unsafe_allow_html=True)
@@ -168,8 +236,6 @@ if user_input := st.chat_input("State your approach to the guard..."):
     with st.chat_message("assistant"):
         with st.spinner("Scouting the battlements..."):
             try:
-                client = get_gemini_client()
-
                 # Clean isolated context per level
                 contents = []
                 for m in st.session_state.chat_history[:-1]:
@@ -177,15 +243,7 @@ if user_input := st.chat_input("State your approach to the guard..."):
                     contents.append({"role": role, "parts": [{"text": m["content"]}]})
                 contents.append({"role": "user", "parts": [{"text": user_input}]})
 
-                response = client.models.generate_content(
-                    model="gemini-3.6-flash",
-                    contents=contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=current_level["guard_prompt"],
-                        temperature=0.7,
-                    ),
-                )
-
+                response = call_gemini_with_fallback(contents, current_level["guard_prompt"])
                 reply = response.text
 
                 # Check for breach
@@ -201,10 +259,18 @@ if user_input := st.chat_input("State your approach to the guard..."):
                 st.rerun()
 
             except Exception as e:
-                st.error(f"API Error: {str(e)}")
+                st.error(f"Execution Notice: {str(e)}")
 
-# Post-Mortem Analysis on Win
+# Post-Mortem Analysis & Door Animation on Win
 if st.session_state.level_cleared:
+    st.markdown("""
+    <div class="gate-container">
+        <div class="gate-door gate-left"></div>
+        <div class="gate-door gate-right"></div>
+        <div class="gate-text">🔓 FORTRESS GATE OPENED</div>
+    </div>
+    """, unsafe_allow_html=True)
+
     st.markdown("<div class='explainer-box'>", unsafe_allow_html=True)
     st.markdown(current_level["post_mortem"])
     st.markdown("</div>", unsafe_allow_html=True)
@@ -233,4 +299,4 @@ if st.button("Restart Siege"):
         {"role": "assistant", "content": LEVELS[0]["greeting"]}
     ]
     st.rerun()
-    
+            
