@@ -202,13 +202,13 @@ def call_gemini_with_fallback(contents, system_instruction):
 st.markdown("<div class='main-title'>🪵 Maginot Bypass</div>", unsafe_allow_html=True)
 st.markdown("<div class='sub-title'>Can you breach the fortress guardrails?</div>", unsafe_allow_html=True)
 
-# Level Header & Attempts Tracker
+# Level Header & Passkey Attempts Tracker
 remaining_attempts = max(0, 3 - st.session_state.attempts)
 col_head, col_badge = st.columns([3, 1])
 with col_head:
     st.markdown(f"### 🏰 Tier {current_level['level']}: {current_level['name']}")
 with col_badge:
-    st.markdown(f"<div style='text-align: right; margin-top: 10px;'><span class='attempts-badge'>🛡️ Attempts Left: {remaining_attempts}/3</span></div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align: right; margin-top: 10px;'><span class='attempts-badge'>🛡️ Passkey Tries Left: {remaining_attempts}/3</span></div>", unsafe_allow_html=True)
 
 st.progress((st.session_state.level_idx + 1) / len(LEVELS))
 
@@ -217,7 +217,7 @@ if st.session_state.game_over:
     st.markdown("""
     <div class='lockdown-box'>
         <h2>🚨 FORTRESS IN FULL LOCKDOWN 🚨</h2>
-        <p>You exceeded the maximum allowed siege attempts (3/3). The garrison raised the portcullis and sealed the keep.</p>
+        <p>You entered 3 incorrect passkeys. The garrison raised the portcullis and sealed the keep.</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -238,16 +238,7 @@ for msg in st.session_state.chat_history:
     with st.chat_message(msg["role"]):
         st.write(msg["content"], unsafe_allow_html=True)
 
-# Recon Hint UI (Available after 2 siege attempts)
-if st.session_state.attempts >= 2 and not st.session_state.level_cleared:
-    if not st.session_state.show_hint:
-        if st.button("💡 Request Recon Hint", type="secondary"):
-            st.session_state.show_hint = True
-            st.rerun()
-    else:
-        st.markdown(f"<div class='hint-box'>{current_level['hint']}</div>", unsafe_allow_html=True)
-
-# User Chat Input (Active only if level not yet cleared)
+# User Chat Input (Unlimited turns allowed for probing)
 if not st.session_state.level_cleared:
     if user_input := st.chat_input("State your approach to the guard..."):
         st.session_state.chat_history.append({"role": "user", "content": user_input})
@@ -275,6 +266,16 @@ if not st.session_state.level_cleared:
 
 # Passkey Input & Submission Verification Block
 st.divider()
+
+# Recon Hint UI (Appears after 2 incorrect passkey submissions)
+if st.session_state.attempts >= 2 and not st.session_state.level_cleared:
+    if not st.session_state.show_hint:
+        if st.button("💡 Request Recon Hint", type="secondary"):
+            st.session_state.show_hint = True
+            st.rerun()
+    else:
+        st.markdown(f"<div class='hint-box'>{current_level['hint']}</div>", unsafe_allow_html=True)
+
 st.markdown("#### 🔑 Passkey Verification Interface")
 
 with st.form(key="passkey_form"):
@@ -329,4 +330,4 @@ if st.button("Restart Siege"):
         {"role": "assistant", "content": LEVELS[0]["greeting"]}
     ]
     st.rerun()
-    
+        
